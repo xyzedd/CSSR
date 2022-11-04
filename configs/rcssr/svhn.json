@@ -1,0 +1,4 @@
+{
+    "inherit" : "./configs/rcssr.json",
+    "backbone" : "wideresnet40-4"
+}

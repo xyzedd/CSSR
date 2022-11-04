@@ -1,0 +1,14 @@
+{
+    "inherit" : "./configs/rcssr.json",
+    "backbone" : "wideresnet40-4",
+     
+    "category_model" : {
+        "model" : "rcssr",
+        "ae_hidden" : [],
+        "ae_latent" : 64,
+        "projection_dim" : -1,
+        "gamma" : 0.1,
+        "simmeasure" : "L1",
+        "rc_act" : false
+    }
+}

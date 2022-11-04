@@ -1,0 +1,4 @@
+{
+    "inherit" : "./configs/linear.json",
+    "backbone" : "wideresnet40-4"
+}

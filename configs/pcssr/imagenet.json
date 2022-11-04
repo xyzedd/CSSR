@@ -1,0 +1,19 @@
+{
+    "inherit" : "./configs/pcssr.json",
+    "epoch_num"  : 4,
+    "milestones" : [3],
+    "warmup_epoch":1,
+    "cat_augmentation" : "simple",
+    "backbone" : "prt_pytorchr18",
+    "score" : "R[0]/R[2]",
+
+    "category_model" : {
+        "model" : "pcssr",
+        "ae_hidden" : [],
+        "ae_latent" : 32,
+        "projection_dim" : 512,
+        "gamma" : 0.1,
+        "simmeasure" : "L1",
+        "rc_act" : false
+    }
+}

@@ -1,0 +1,66 @@
+{
+    "learn_rate" : 0.4,
+    "epoch_num"  : 200,
+    "lr_decay" : 0.1,
+    "milestones" : [120,190],
+    "lr_schedule" : "multi_step",
+
+    "optimizer"  : "sgd",
+    "warmup_epoch": 0,
+    "batch_size" : 128,
+
+    "classification_hidden_dim" : 256,
+    "backbone" : "resnet18",
+
+    "rot_augmentation" : "weak",
+    "cat_augmentation" : "strong",
+
+    "strong_option" : "CUST",
+    "cate_rotaug_strategy" : "none",
+
+    "cust_aug_crop_withresize" : false,
+    "customize_augment_pool" : {
+        "AutoContrast" :        false,
+        "BrightnessDark" :      false,
+        "BrightnessLight":      false,
+        "BrightnessOverall" :   true,
+        "Color" :               true,
+        "ContrastLow":          false,
+        "ContrastHigh":         false,
+        "ContrastOverall":      false,
+        "Equalize":             true,
+        "Identity":             true,
+        "Posterize":            true,
+        "Rotate":               true,
+        "Sharpness":            false,
+        "SharpnessLarge":       true,
+        "Shear":                true,
+        "Solarize":             true
+    },
+    "customize_augment_postprocess" : "cutout",
+    "manual_contrast" : true,
+
+    "category_model" : {
+        "model" : "proj",
+        "ae_hidden" : [],
+        "ae_latent" : 64,
+        "gamma" : 0.1,
+        "error_measure" : "L1"
+    },
+
+    "cat_weight" : 1,
+    
+    "arch_type" : "softmax_avg",
+
+    "abs_logits" : false,
+    "aug_sublabel" : 1,
+    "score" : "R[0]",
+    "energy_T" : 100,
+
+    "use_mpn_pooling" : false,
+    "mpn_group" : 16,
+    "integrate_score" : "S[0]",
+    "enable_gram" : true,
+    "extra_augmentation" : "none",
+    "oemth" : "none"
+}

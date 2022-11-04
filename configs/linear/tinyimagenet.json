@@ -1,0 +1,7 @@
+{
+    "inherit" : "./configs/linear.json",
+    "epoch_num"  : 235,
+    "milestones" : [150,225],
+    "warmup_epoch": 1,
+    "backbone" : "resnet18"
+}

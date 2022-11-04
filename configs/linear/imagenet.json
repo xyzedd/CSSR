@@ -1,0 +1,18 @@
+{
+    "inherit" : "./configs/linear.json",
+    "epoch_num"  : 4,
+    "milestones" : [3],
+    "warmup_epoch":1,
+    "cat_augmentation" : "simple",
+    "backbone" : "prt_pytorchr18",
+
+    "category_model" : {
+        "model" : "linear",
+        "ae_hidden" : [],
+        "ae_latent" : 32,
+        "projection_dim" : -1,
+        "gamma" : 1,
+        "simmeasure" : "L1",
+        "rc_act" : true
+    }
+}
