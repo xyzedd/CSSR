@@ -1,0 +1,4 @@
+resources/
+save/
+__pycache__/
+.vscode/
