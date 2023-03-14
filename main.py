@@ -2,6 +2,8 @@
 import numpy as np
 import argparse
 
+from sklearn.metrics import euclidean_distances
+
 import dataset
 import json
 import metrics
@@ -127,6 +129,7 @@ def overall_testing():
     global last_acc, last_auroc, last_f1, cwauc, best_acc, best_auroc
 
     scores, thresh, pred = mth.knownpred_unknwonscore_test(test_loader)
+    euclidean_dist_errs = mth.get_euclidean_distance()
     last_acc = evaluation.close_accuracy(pred)
     indexes = evaluation.open_detection_indexes(scores, thresh)
     last_auroc = indexes['auroc']
@@ -137,12 +140,12 @@ def overall_testing():
         "open_detection": indexes,
         "open_reco": osr_indexes
     })
-    metrics = {
+    metrices = {
         "close acc": last_acc,
         "open_detection": indexes,
         "open_reco": osr_indexes}
     with open("./save/run01/eval.json", "w") as f:
-        json.dump(metrics, f)
+        json.dump(metrices, f)
 
 
 def update_config_keyvalues(config, update):
@@ -242,6 +245,7 @@ if __name__ == "__main__":
     history = []
     evaluation = metrics.OSREvaluation(test_loader)
 
+    args.test = True
     if not args.test:
         print(f"TotalEpochs:{config['epoch_num']}")
         training_main()
