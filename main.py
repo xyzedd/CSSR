@@ -1,9 +1,6 @@
 
 import numpy as np
 import argparse
-
-from sklearn.metrics import euclidean_distances
-
 import dataset
 import json
 import metrics
@@ -208,9 +205,9 @@ if __name__ == "__main__":
     parser.add_argument('--ds', type=str, required=False, default="./exps/cifar10/spl_a.json",
                         help='dataset setting, choose file from ./exps')
     parser.add_argument('--config', type=str, required=False,
-                        default="./configs/linear/cifar10.json", help='model configuration, choose from ./configs')
+                        default="./configs/pcssr/cifar10.json", help='model configuration, choose from ./configs')
     parser.add_argument('--save', type=str, required=False,
-                        default="run01", help='Saving folder name')
+                        default="run03", help='Saving folder name')
     parser.add_argument('--method', type=str, required=False, default="cssr",
                         help='Methods : ' + ",".join(util.method_list.keys()))
     parser.add_argument('--test', action="store_true", help='Evaluation mode')

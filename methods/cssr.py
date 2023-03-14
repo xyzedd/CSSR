@@ -247,18 +247,12 @@ class CSSRClassifier(nn.Module):
 
     def forward(self, x):
         cls_ers = []
-        # latent_array = {"AE_0": [], "AE_1": [],
-        #                 "AE_2": [], "AE_3": [], "AE_4": [], "AE_5": []}
         latents = []
         for i in range(len(self.class_aes)):
-            # print(i)
             rc, lt = self.class_aes[i](x)  # Pass the input to autoencoder i.
             # latent_array[f"AE_{i}"].append(lt)
             latents.append(lt)
             # Same input goes to all the autoencoders, once at a time.
-            # TODO: Perform latent mean here. Save the latent of each forward pass to a dictionary
-            # TODO cont: {forwardpass_batchnum : [lt]}
-            # TODO cont: eg: {forwardpass_01 : lat_vec}
             # Here computing the autoencoder error between rc, and x
             cls_er = self.ae_error(rc, x)
             if CSSRClassifier.clip_len > 0:
@@ -367,7 +361,6 @@ class CSSRModel(nn.Module):
             latent_mean = torch.mean(stacked_latent_vec, dim=0)
 
             for lat_val in lat_val_AE:
-                lat_val = lat_val.cuda()
                 # TODO: get Euclidean distance between mean latent and the latent of a single batch
                 print(f"lat val shape is {lat_val.shape}")
                 print(f"lat mean shape is {latent_mean.shape}")
