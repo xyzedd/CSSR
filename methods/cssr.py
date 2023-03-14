@@ -185,12 +185,15 @@ class AutoEncoder(nn.Module):
             self.center = nn.Parameter(torch.rand([inchannel, 1, 1]), True)
 
     def forward(self, x):
+        # print(x[1][1][1])
         if self.latent_size > 0:
             output = x
             for cv in self.encode_convs:
                 output = cv(output)
             latent = self.latent_conv(output)
             output = self.latent_deconv(latent)
+            # print(output.shape)
+            zmean = torch.mean(output)
             for cv in self.decode_convs:
                 output = cv(output)
             return output, latent
@@ -199,7 +202,7 @@ class AutoEncoder(nn.Module):
 
 
 class CSSRClassifier(nn.Module):
-
+    # TODO: Update here for getting latent vector and its average
     def __init__(self, inchannels, num_class, config):
         super().__init__()
         ae_hidden = config['ae_hidden']
@@ -208,6 +211,7 @@ class CSSRClassifier(nn.Module):
         for i in range(num_class):
             ae = AutoEncoder(inchannels, ae_hidden, ae_latent)
             self.class_aes.append(ae)
+        # nn.Modulelist holds submodules in  list
         self.class_aes = nn.ModuleList(self.class_aes)
         # self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.useL1 = config['error_measure'] == 'L1'
@@ -215,26 +219,54 @@ class CSSRClassifier(nn.Module):
         self.reduction = -1 if config['model'] == 'pcssr' else 1
         self.reduction *= config['gamma']
 
+    # TODO: create new method for the new error calcultion based on euclidean distance
     def ae_error(self, rc, x):
+        """Calculating the autoencoder reconstruction error.
+
+        Args:
+            rc (reconstructed): _description_
+            x (input): _description_
+
+        Returns:
+            _type_: _description_
+        """
         if self.useL1:
+            # torch.norm calculates the L1 norm (also known as Manhattan distance or taxicab distance)
+            # between two tensors rc and x along second dimension
             # return torch.sum(torch.abs(rc-x) * self.reduction,dim=1,keepdim=True)
             return torch.norm(rc - x, p=1, dim=1, keepdim=True) * self.reduction
+        # keepdim = True argument ensures that the result has the same number of dimensions as the input tensor
         else:
             return torch.norm(rc - x, p=2, dim=1, keepdim=True) ** 2 * self.reduction
 
     clip_len = 100
 
+    def latent(self):
+        {}
+        pass
+
     def forward(self, x):
         cls_ers = []
+        # latent_array = {"AE_0": [], "AE_1": [],
+        #                 "AE_2": [], "AE_3": [], "AE_4": [], "AE_5": []}
+        latents = []
         for i in range(len(self.class_aes)):
-            rc, lt = self.class_aes[i](x)
+            # print(i)
+            rc, lt = self.class_aes[i](x)  # Pass the input to autoencoder i.
+            # latent_array[f"AE_{i}"].append(lt)
+            latents.append(lt)
+            # Same input goes to all the autoencoders, once at a time.
+            # TODO: Perform latent mean here. Save the latent of each forward pass to a dictionary
+            # TODO cont: {forwardpass_batchnum : [lt]}
+            # TODO cont: eg: {forwardpass_01 : lat_vec}
+            # Here computing the autoencoder error between rc, and x
             cls_er = self.ae_error(rc, x)
             if CSSRClassifier.clip_len > 0:
                 cls_er = torch.clamp(
                     cls_er, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
             cls_ers.append(cls_er)
         logits = torch.cat(cls_ers, dim=1)
-        return logits
+        return logits, latents
 
 
 def G_p(ob, p):
@@ -279,18 +311,24 @@ class BackboneAndClassifier(nn.Module):
 
     def __init__(self, num_classes, config):
         super().__init__()
-        clsblock = {'linear': LinearClassifier,
-                    'pcssr': CSSRClassifier, 'rcssr': CSSRClassifier}
+        # clsblock = {'linear': LinearClassifier,
+        #             'pcssr': CSSRClassifier, 'rcssr': CSSRClassifier}
+
+        clsblock = {'pcssr': CSSRClassifier, 'rcssr': CSSRClassifier}
         self.backbone = Backbone(config, 3)
         cat_config = config['category_model']
-        self.cat_cls = clsblock[cat_config['model']](
+        # self.cat_cls = clsblock[cat_config['model']](
+        #     self.backbone.output_dim, num_classes, cat_config)
+
+        self.cat_cls = clsblock['pcssr'](
             self.backbone.output_dim, num_classes, cat_config)
 
     def forward(self, x, feature_only=False):
         x = self.backbone(x)
+        logits, latents = self.cat_cls(x)
         if feature_only:
             return x
-        return x, self.cat_cls(x)
+        return x, logits, latents
 
 
 class CSSRModel(nn.Module):
@@ -301,7 +339,7 @@ class CSSRModel(nn.Module):
 
         # ------ New Arch
         self.backbone_cs = BackboneAndClassifier(num_classes, config)
-
+        self.latent_array = []
         self.config = config
         self.mins = {i: [] for i in range(num_classes)}
         self.maxs = {i: [] for i in range(num_classes)}
@@ -311,6 +349,45 @@ class CSSRModel(nn.Module):
         self.avg_gram = [[[0, 0]
                           for i in range(num_classes)] for i in self.powers]
         self.enable_gram = config['enable_gram']
+
+    def mean_latent(self):
+        lat_val_for_all_AEs = []
+        for i in range(len(self.latent_array[0])):
+            lat_val_for_each_AE = []
+            for j in range(len(self.latent_array)):
+                lat_val_for_each_AE.append(self.latent_array[j][i])
+            lat_val_for_all_AEs.append(lat_val_for_each_AE)
+
+        eucli_dists_all_AEs = []
+        for lat_val_AE in lat_val_for_all_AEs:
+            eucli_dists_single_AE = []
+
+            stacked_latent_vec = torch.cat(lat_val_AE, dim=0)
+            print(stacked_latent_vec.shape)
+            latent_mean = torch.mean(stacked_latent_vec, dim=0)
+
+            for lat_val in lat_val_AE:
+                lat_val = lat_val.cuda()
+                # TODO: get Euclidean distance between mean latent and the latent of a single batch
+                print(f"lat val shape is {lat_val.shape}")
+                print(f"lat mean shape is {latent_mean.shape}")
+                # eucl_dist = torch.sqrt(
+                #     torch.sum((lat_val - latent_mean)**2)).cpu()
+
+                eucl_dist = torch.norm(
+                    latent_mean - lat_val, p=2, dim=1, keepdim=True)    # l2 norm euclidean dist
+
+                eucl_err = torch.clamp(
+                    eucl_dist, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
+
+                eucli_dists_single_AE.append(eucl_err)
+            new_logits = torch.cat(eucli_dists_single_AE, dim=0)
+            eucli_dists_all_AEs.append(new_logits)
+
+        return eucli_dists_all_AEs
+
+    def distance_error(self):
+        pass
 
     def update_minmax(self, feat_list, power=[], ypred=None):
         # feat_list = self.gram_feature_list(batch)
@@ -452,10 +529,12 @@ class CSSRModel(nn.Module):
     def forward(self, x, ycls=None, reqpredauc=False, prepareTest=False, reqfeature=False):
 
         # ----- New Arch
-        x = self.backbone_cs(x, feature_only=reqfeature)
+        x, logits, latents = self.backbone_cs(x, feature_only=reqfeature)
+        # TODO: Here append the latent vectors of all AEs for one batch forward pass.
+        self.latent_array.append(latents)
         if reqfeature:
             return x
-        x, xcls_raw = x
+        x, xcls_raw = x, logits
 
         def pred_score(xcls):
             def score_reduce(x): return x.reshape(
@@ -487,6 +566,7 @@ class CSSRModel(nn.Module):
             xcls = self.crt(xcls_raw, ycls)
             if reqpredauc:
                 pred, score = pred_score(xcls_raw.detach())
+                # TODO: Here return the latent vector as well.
                 return xcls, pred, score
         else:
             xcls = xcls_raw
@@ -522,6 +602,8 @@ class CSSRCriterion(nn.Module):
         self.avg_order = {"avg_softmax": 1, "softmax_avg": 2}[avg_order]
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.enable_sigma = enable_sigma
+
+    # TODO: Change in forward method to update the loss function from softmax to CAC distance based loss @ https://github.com/dimitymiller/cac-openset
 
     def forward(self, x, y=None, prob=False, pred=False):
         if self.avg_order == 1:
@@ -681,6 +763,9 @@ class CSSRMethod:
         pred, scores, _, _ = self.scoring(test_loader)
         return pred
 
+    def get_euclidean_distance(self):
+        return self.model.mean_latent()
+
     def scoring(self, loader, prepare=False):
         gts = []
         deviations = []
@@ -693,6 +778,7 @@ class CSSRMethod:
                 gt = d[1].numpy()
                 pred, scr, dev = self.model(
                     x1, reqpredauc=True, prepareTest=prepare)
+
                 prediction.append(pred)
                 scores.append(scr)
                 gts.append(gt)
