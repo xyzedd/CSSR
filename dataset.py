@@ -311,6 +311,7 @@ def get_combined_dataloaders(args, settings):
     print("Load with train mode :", istrain_mode)
     train_labeled = get_combined_dataset('train', settings['train'])
     test = get_combined_dataset('test', settings['test'])
+    # Load the train and test loader in batch
     return torch.utils.data.DataLoader(train_labeled, batch_size=args.bs, shuffle=istrain_mode, num_workers=workers, pin_memory=True, drop_last=use_droplast) if train_labeled is not None else None,\
         torch.utils.data.DataLoader(test, batch_size=args.bs, shuffle=False, num_workers=test_workers,
                                     pin_memory=args.gpu != 'cpu') if test is not None else None
@@ -335,5 +336,5 @@ def load_partitioned_dataset(args, ds):
     with open(ds, 'r') as f:
         settings = json.load(f)
     util.img_size = imgsize_dict[settings['name']]
-    a, b = get_combined_dataloaders(args, settings)
+    a, b = get_combined_dataloaders(args, settings)  # a: features, b: labels
     return a, b, ds_classnum_dict[settings['name']]
