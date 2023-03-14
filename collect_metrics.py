@@ -1,11 +1,12 @@
 import json
 
-methods = ['linear','pcssr','rcssr']
-datasets = ['cifar10','svhn','tinyimagenet']
-splits = ['a','b','c','d', 'e']
+methods = ['linear', 'pcssr', 'rcssr']
+# datasets = ['cifar10', 'svhn', 'tinyimagenet']
+splits = ['a', 'b', 'c']
 
-def get_metric(file,metric,is_last = True):
-    with open(file,'r') as f:
+
+def get_metric(file, metric, is_last=True):
+    with open(file, 'r') as f:
         hist = json.load(f)
     # last metric
     if is_last:
@@ -24,20 +25,25 @@ def get_metric(file,metric,is_last = True):
                     epoch = -1
                     break
                 epoch = epoch[m]
-            res = max(res,epoch)
+            res = max(res, epoch)
     return res
 
-def generate_tables(use_last = True):
-    for ds in datasets:
-        print("\nDataset",ds,"Last Epoch" if use_last else "Best Epoch")
-        print('method','average',*splits,sep='\t')
-        for mth in methods:
-            metrics = [get_metric(f'./save/{mth}_{ds}_{s}/hist.json','open_detection.auroc',use_last) for s in splits]
-            # print(metrics)
-            avg = sum(metrics) / len(metrics)
-            metrics = [avg] + metrics
-            metrics = list(map(lambda x:'%.04f' % x,metrics))
-            print(mth,*metrics,sep='\t')
+
+def generate_tables(use_last=True):
+    # for ds in datasets:
+    # print("\nDataset", ds, "Last Epoch" if use_last else "Best Epoch")
+    print('method', 'average', *splits, sep='\t')
+    for mth in methods:
+        # metrics = [get_metric(
+        #     f'./save/{mth}_{ds}_{s}/hist.json', 'open_detection.auroc', use_last) for s in splits]
+        metrics = [get_metric(
+            f'./save/{mth}_{s}/hist.json', 'open_detection.auroc', use_last) for s in splits]
+        # print(metrics)
+        avg = sum(metrics) / len(metrics)
+        metrics = [avg] + metrics
+        metrics = list(map(lambda x: '%.04f' % x, metrics))
+        print(mth, *metrics, sep='\t')
+
 
 generate_tables(True)
 generate_tables(False)
