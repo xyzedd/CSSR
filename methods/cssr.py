@@ -185,15 +185,12 @@ class AutoEncoder(nn.Module):
             self.center = nn.Parameter(torch.rand([inchannel, 1, 1]), True)
 
     def forward(self, x):
-        # print(x[1][1][1])
         if self.latent_size > 0:
             output = x
             for cv in self.encode_convs:
                 output = cv(output)
             latent = self.latent_conv(output)
             output = self.latent_deconv(latent)
-            # print(output.shape)
-            zmean = torch.mean(output)
             for cv in self.decode_convs:
                 output = cv(output)
             return output, latent
@@ -260,6 +257,9 @@ class CSSRClassifier(nn.Module):
                     cls_er, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
             cls_ers.append(cls_er)
         logits = torch.cat(cls_ers, dim=1)
+        # TODO: get average of latents and calculate the error here
+        # latent_mean = torch.mean(torch.cat(lt, dim=0), dim=0)
+
         return logits, latents
 
 
@@ -361,9 +361,6 @@ class CSSRModel(nn.Module):
             latent_mean = torch.mean(stacked_latent_vec, dim=0)
 
             for lat_val in lat_val_AE:
-                # TODO: get Euclidean distance between mean latent and the latent of a single batch
-                print(f"lat val shape is {lat_val.shape}")
-                print(f"lat mean shape is {latent_mean.shape}")
                 # eucl_dist = torch.sqrt(
                 #     torch.sum((lat_val - latent_mean)**2)).cpu()
 
@@ -373,9 +370,11 @@ class CSSRModel(nn.Module):
                 eucl_err = torch.clamp(
                     eucl_dist, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
 
-                eucli_dists_single_AE.append(eucl_err)
-            new_logits = torch.cat(eucli_dists_single_AE, dim=0)
-            eucli_dists_all_AEs.append(new_logits)
+                if eucl_err.shape[0] == 128:
+                    eucli_dists_single_AE.append(eucl_err)
+            eucli_dists_all_AEs.append(eucli_dists_single_AE)
+
+            # eucli_dists_all_AEs.append(new_logits)
 
         return eucli_dists_all_AEs
 
@@ -523,7 +522,7 @@ class CSSRModel(nn.Module):
 
         # ----- New Arch
         x, logits, latents = self.backbone_cs(x, feature_only=reqfeature)
-        # TODO: Here append the latent vectors of all AEs for one batch forward pass.
+        # TODO: Append latents during evaluation here.
         self.latent_array.append(latents)
         if reqfeature:
             return x
