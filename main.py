@@ -141,7 +141,7 @@ def overall_testing():
         "close acc": last_acc,
         "open_detection": indexes,
         "open_reco": osr_indexes}
-    with open("./save/run01/eval.json", "w") as f:
+    with open("./save/run03/eval.json", "w") as f:
         json.dump(metrices, f)
 
 
