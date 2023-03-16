@@ -238,17 +238,21 @@ class CSSRClassifier(nn.Module):
 
     clip_len = 100
 
-    def latent(self):
-        {}
-        pass
-
     def forward(self, x):
         cls_ers = []
-        latents = []
+        cls_errs2 = []
         for i in range(len(self.class_aes)):
             rc, lt = self.class_aes[i](x)  # Pass the input to autoencoder i.
-            # latent_array[f"AE_{i}"].append(lt)
-            latents.append(lt)
+            z_mean = torch.mean(lt, dim=0, keepdim=True)
+            # splitting the tensor into chunks of batch_size shape
+            lt_chunks = torch.chunk(lt, chunks=lt.shape[0], dim=0)
+            errs = []
+            for lt_chunk in lt_chunks:
+                err = self.ae_error(z_mean, lt_chunk)
+                errs.append(err)
+            # Concatenate all chunks to create size of batch_size.
+            cat_errs = torch.cat(errs, dim=0)
+            cls_errs2.append(cat_errs)
             # Same input goes to all the autoencoders, once at a time.
             # Here computing the autoencoder error between rc, and x
             cls_er = self.ae_error(rc, x)
@@ -256,11 +260,10 @@ class CSSRClassifier(nn.Module):
                 cls_er = torch.clamp(
                     cls_er, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
             cls_ers.append(cls_er)
-        logits = torch.cat(cls_ers, dim=1)
-        # TODO: get average of latents and calculate the error here
-        # latent_mean = torch.mean(torch.cat(lt, dim=0), dim=0)
+        # logits = torch.cat(cls_ers, dim=1)
+        logits = torch.cat(cls_errs2, dim=1)
 
-        return logits, latents
+        return logits
 
 
 def G_p(ob, p):
@@ -319,10 +322,10 @@ class BackboneAndClassifier(nn.Module):
 
     def forward(self, x, feature_only=False):
         x = self.backbone(x)
-        logits, latents = self.cat_cls(x)
+        logits = self.cat_cls(x)
         if feature_only:
             return x
-        return x, logits, latents
+        return x, logits
 
 
 class CSSRModel(nn.Module):
@@ -333,7 +336,7 @@ class CSSRModel(nn.Module):
 
         # ------ New Arch
         self.backbone_cs = BackboneAndClassifier(num_classes, config)
-        self.latent_array = []
+
         self.config = config
         self.mins = {i: [] for i in range(num_classes)}
         self.maxs = {i: [] for i in range(num_classes)}
@@ -343,43 +346,6 @@ class CSSRModel(nn.Module):
         self.avg_gram = [[[0, 0]
                           for i in range(num_classes)] for i in self.powers]
         self.enable_gram = config['enable_gram']
-
-    def mean_latent(self):
-        lat_val_for_all_AEs = []
-        for i in range(len(self.latent_array[0])):
-            lat_val_for_each_AE = []
-            for j in range(len(self.latent_array)):
-                lat_val_for_each_AE.append(self.latent_array[j][i])
-            lat_val_for_all_AEs.append(lat_val_for_each_AE)
-
-        eucli_dists_all_AEs = []
-        for lat_val_AE in lat_val_for_all_AEs:
-            eucli_dists_single_AE = []
-
-            stacked_latent_vec = torch.cat(lat_val_AE, dim=0)
-            print(stacked_latent_vec.shape)
-            latent_mean = torch.mean(stacked_latent_vec, dim=0)
-
-            for lat_val in lat_val_AE:
-                # eucl_dist = torch.sqrt(
-                #     torch.sum((lat_val - latent_mean)**2)).cpu()
-
-                eucl_dist = torch.norm(
-                    latent_mean - lat_val, p=2, dim=1, keepdim=True)    # l2 norm euclidean dist
-
-                eucl_err = torch.clamp(
-                    eucl_dist, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
-
-                if eucl_err.shape[0] == 128:
-                    eucli_dists_single_AE.append(eucl_err)
-            eucli_dists_all_AEs.append(eucli_dists_single_AE)
-
-            # eucli_dists_all_AEs.append(new_logits)
-
-        return eucli_dists_all_AEs
-
-    def distance_error(self):
-        pass
 
     def update_minmax(self, feat_list, power=[], ypred=None):
         # feat_list = self.gram_feature_list(batch)
@@ -521,9 +487,8 @@ class CSSRModel(nn.Module):
     def forward(self, x, ycls=None, reqpredauc=False, prepareTest=False, reqfeature=False):
 
         # ----- New Arch
-        x, logits, latents = self.backbone_cs(x, feature_only=reqfeature)
+        x, logits = self.backbone_cs(x, feature_only=reqfeature)
         # TODO: Append latents during evaluation here.
-        self.latent_array.append(latents)
         if reqfeature:
             return x
         x, xcls_raw = x, logits
