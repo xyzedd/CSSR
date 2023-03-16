@@ -227,20 +227,20 @@ class CSSRClassifier(nn.Module):
         Returns:
             _type_: _description_
         """
-        if self.useL1:
-            # torch.norm calculates the L1 norm (also known as Manhattan distance or taxicab distance)
-            # between two tensors rc and x along second dimension
-            # return torch.sum(torch.abs(rc-x) * self.reduction,dim=1,keepdim=True)
-            return torch.norm(rc - x, p=1, dim=1, keepdim=True) * self.reduction
-        # keepdim = True argument ensures that the result has the same number of dimensions as the input tensor
-        else:
-            return torch.norm(rc - x, p=2, dim=1, keepdim=True) ** 2 * self.reduction
+        # if self.useL1:
+        #     # torch.norm calculates the L1 norm (also known as Manhattan distance or taxicab distance)
+        #     # between two tensors rc and x along second dimension
+        #     # return torch.sum(torch.abs(rc-x) * self.reduction,dim=1,keepdim=True)
+        #     return torch.norm(rc - x, p=1, dim=1, keepdim=True) * self.reduction
+        # # keepdim = True argument ensures that the result has the same number of dimensions as the input tensor
+        # else:
+        # Euclidean dist norm
+        return torch.norm(rc - x, p=2, dim=1, keepdim=True) ** 2 * self.reduction
 
     clip_len = 100
 
     def forward(self, x):
         cls_ers = []
-        cls_errs2 = []
         for i in range(len(self.class_aes)):
             rc, lt = self.class_aes[i](x)  # Pass the input to autoencoder i.
             z_mean = torch.mean(lt, dim=0, keepdim=True)
@@ -252,16 +252,13 @@ class CSSRClassifier(nn.Module):
                 errs.append(err)
             # Concatenate all chunks to create size of batch_size.
             cat_errs = torch.cat(errs, dim=0)
-            cls_errs2.append(cat_errs)
-            # Same input goes to all the autoencoders, once at a time.
-            # Here computing the autoencoder error between rc, and x
-            cls_er = self.ae_error(rc, x)
+
             if CSSRClassifier.clip_len > 0:
-                cls_er = torch.clamp(
-                    cls_er, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
-            cls_ers.append(cls_er)
-        # logits = torch.cat(cls_ers, dim=1)
-        logits = torch.cat(cls_errs2, dim=1)
+                cat_errs = torch.clamp(
+                    cat_errs, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
+
+            cls_ers.append(cat_errs)
+        logits = torch.cat(cls_ers, dim=1)
 
         return logits
 
