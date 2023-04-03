@@ -199,7 +199,7 @@ class AutoEncoder(nn.Module):
 
 
 class CSSRClassifier(nn.Module):
-
+    # TODO: Update here for getting latent vector and its average
     def __init__(self, inchannels, num_class, config):
         super().__init__()
         ae_hidden = config['ae_hidden']
@@ -208,6 +208,7 @@ class CSSRClassifier(nn.Module):
         for i in range(num_class):
             ae = AutoEncoder(inchannels, ae_hidden, ae_latent)
             self.class_aes.append(ae)
+        # nn.Modulelist holds submodules in  list
         self.class_aes = nn.ModuleList(self.class_aes)
         # self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.useL1 = config['error_measure'] == 'L1'
@@ -215,25 +216,50 @@ class CSSRClassifier(nn.Module):
         self.reduction = -1 if config['model'] == 'pcssr' else 1
         self.reduction *= config['gamma']
 
+    # TODO: create new method for the new error calcultion based on euclidean distance
     def ae_error(self, rc, x):
-        if self.useL1:
-            # return torch.sum(torch.abs(rc-x) * self.reduction,dim=1,keepdim=True)
-            return torch.norm(rc - x, p=1, dim=1, keepdim=True) * self.reduction
-        else:
-            return torch.norm(rc - x, p=2, dim=1, keepdim=True) ** 2 * self.reduction
+        """Calculating the autoencoder reconstruction error.
+
+        Args:
+            rc (reconstructed): _description_
+            x (input): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        # if self.useL1:
+        #     # torch.norm calculates the L1 norm (also known as Manhattan distance or taxicab distance)
+        #     # between two tensors rc and x along second dimension
+        #     # return torch.sum(torch.abs(rc-x) * self.reduction,dim=1,keepdim=True)
+        #     return torch.norm(rc - x, p=1, dim=1, keepdim=True) * self.reduction
+        # # keepdim = True argument ensures that the result has the same number of dimensions as the input tensor
+        # else:
+        # Euclidean dist norm
+        return torch.norm(rc - x, p=2, dim=1, keepdim=True) ** 2 * self.reduction
 
     clip_len = 100
 
     def forward(self, x):
         cls_ers = []
         for i in range(len(self.class_aes)):
-            rc, lt = self.class_aes[i](x)
-            cls_er = self.ae_error(rc, x)
+            rc, lt = self.class_aes[i](x)  # Pass the input to autoencoder i.
+            z_mean = torch.mean(lt, dim=0, keepdim=True)
+            # splitting the tensor into chunks of batch_size shape
+            lt_chunks = torch.chunk(lt, chunks=lt.shape[0], dim=0)
+            errs = []
+            for lt_chunk in lt_chunks:
+                err = self.ae_error(z_mean, lt_chunk)
+                errs.append(err)
+            # Concatenate all chunks to create size of batch_size.
+            cat_errs = torch.cat(errs, dim=0)
+
             if CSSRClassifier.clip_len > 0:
-                cls_er = torch.clamp(
-                    cls_er, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
-            cls_ers.append(cls_er)
+                cat_errs = torch.clamp(
+                    cat_errs, -CSSRClassifier.clip_len, CSSRClassifier.clip_len)
+
+            cls_ers.append(cat_errs)
         logits = torch.cat(cls_ers, dim=1)
+
         return logits
 
 
@@ -279,18 +305,24 @@ class BackboneAndClassifier(nn.Module):
 
     def __init__(self, num_classes, config):
         super().__init__()
-        clsblock = {'linear': LinearClassifier,
-                    'pcssr': CSSRClassifier, 'rcssr': CSSRClassifier}
+        # clsblock = {'linear': LinearClassifier,
+        #             'pcssr': CSSRClassifier, 'rcssr': CSSRClassifier}
+
+        clsblock = {'pcssr': CSSRClassifier, 'rcssr': CSSRClassifier}
         self.backbone = Backbone(config, 3)
         cat_config = config['category_model']
-        self.cat_cls = clsblock[cat_config['model']](
+        # self.cat_cls = clsblock[cat_config['model']](
+        #     self.backbone.output_dim, num_classes, cat_config)
+
+        self.cat_cls = clsblock['pcssr'](
             self.backbone.output_dim, num_classes, cat_config)
 
     def forward(self, x, feature_only=False):
         x = self.backbone(x)
+        logits = self.cat_cls(x)
         if feature_only:
             return x
-        return x, self.cat_cls(x)
+        return x, logits
 
 
 class CSSRModel(nn.Module):
@@ -452,10 +484,11 @@ class CSSRModel(nn.Module):
     def forward(self, x, ycls=None, reqpredauc=False, prepareTest=False, reqfeature=False):
 
         # ----- New Arch
-        x = self.backbone_cs(x, feature_only=reqfeature)
+        x, logits = self.backbone_cs(x, feature_only=reqfeature)
+        # TODO: Append latents during evaluation here.
         if reqfeature:
             return x
-        x, xcls_raw = x
+        x, xcls_raw = x, logits
 
         def pred_score(xcls):
             def score_reduce(x): return x.reshape(
@@ -487,6 +520,7 @@ class CSSRModel(nn.Module):
             xcls = self.crt(xcls_raw, ycls)
             if reqpredauc:
                 pred, score = pred_score(xcls_raw.detach())
+                # TODO: Here return the latent vector as well.
                 return xcls, pred, score
         else:
             xcls = xcls_raw
@@ -522,6 +556,8 @@ class CSSRCriterion(nn.Module):
         self.avg_order = {"avg_softmax": 1, "softmax_avg": 2}[avg_order]
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.enable_sigma = enable_sigma
+
+    # TODO: Change in forward method to update the loss function from softmax to CAC distance based loss @ https://github.com/dimitymiller/cac-openset
 
     def forward(self, x, y=None, prob=False, pred=False):
         if self.avg_order == 1:
@@ -681,6 +717,9 @@ class CSSRMethod:
         pred, scores, _, _ = self.scoring(test_loader)
         return pred
 
+    def get_euclidean_distance(self):
+        return self.model.mean_latent()
+
     def scoring(self, loader, prepare=False):
         gts = []
         deviations = []
@@ -693,6 +732,7 @@ class CSSRMethod:
                 gt = d[1].numpy()
                 pred, scr, dev = self.model(
                     x1, reqpredauc=True, prepareTest=prepare)
+
                 prediction.append(pred)
                 scores.append(scr)
                 gts.append(gt)

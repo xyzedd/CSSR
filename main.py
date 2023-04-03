@@ -1,7 +1,6 @@
 
 import numpy as np
 import argparse
-
 import dataset
 import json
 import metrics
@@ -127,6 +126,7 @@ def overall_testing():
     global last_acc, last_auroc, last_f1, cwauc, best_acc, best_auroc
 
     scores, thresh, pred = mth.knownpred_unknwonscore_test(test_loader)
+    # euclidean_dist_errs = mth.get_euclidean_distance()
     last_acc = evaluation.close_accuracy(pred)
     indexes = evaluation.open_detection_indexes(scores, thresh)
     last_auroc = indexes['auroc']
@@ -137,12 +137,12 @@ def overall_testing():
         "open_detection": indexes,
         "open_reco": osr_indexes
     })
-    metrics = {
+    metrices = {
         "close acc": last_acc,
         "open_detection": indexes,
         "open_reco": osr_indexes}
-    with open("./save/run01/eval.json", "w") as f:
-        json.dump(metrics, f)
+    with open("./save/run04/eval.json", "w") as f:
+        json.dump(metrices, f)
 
 
 def update_config_keyvalues(config, update):
@@ -205,9 +205,9 @@ if __name__ == "__main__":
     parser.add_argument('--ds', type=str, required=False, default="./exps/cifar10/spl_a.json",
                         help='dataset setting, choose file from ./exps')
     parser.add_argument('--config', type=str, required=False,
-                        default="./configs/linear/cifar10.json", help='model configuration, choose from ./configs')
+                        default="./configs/pcssr/cifar10.json", help='model configuration, choose from ./configs')
     parser.add_argument('--save', type=str, required=False,
-                        default="run01", help='Saving folder name')
+                        default="run04", help='Saving folder name')
     parser.add_argument('--method', type=str, required=False, default="cssr",
                         help='Methods : ' + ",".join(util.method_list.keys()))
     parser.add_argument('--test', action="store_true", help='Evaluation mode')
@@ -242,6 +242,7 @@ if __name__ == "__main__":
     history = []
     evaluation = metrics.OSREvaluation(test_loader)
 
+    # args.test = True
     if not args.test:
         print(f"TotalEpochs:{config['epoch_num']}")
         training_main()
