@@ -126,7 +126,7 @@ def overall_testing():
     global last_acc, last_auroc, last_f1, cwauc, best_acc, best_auroc
 
     scores, thresh, pred = mth.knownpred_unknwonscore_test(test_loader)
-    euclidean_dist_errs = mth.get_euclidean_distance()
+    # euclidean_dist_errs = mth.get_euclidean_distance()
     last_acc = evaluation.close_accuracy(pred)
     indexes = evaluation.open_detection_indexes(scores, thresh)
     last_auroc = indexes['auroc']
@@ -141,7 +141,7 @@ def overall_testing():
         "close acc": last_acc,
         "open_detection": indexes,
         "open_reco": osr_indexes}
-    with open("./save/run03/eval.json", "w") as f:
+    with open("./save/run04/eval.json", "w") as f:
         json.dump(metrices, f)
 
 
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     parser.add_argument('--config', type=str, required=False,
                         default="./configs/pcssr/cifar10.json", help='model configuration, choose from ./configs')
     parser.add_argument('--save', type=str, required=False,
-                        default="run03", help='Saving folder name')
+                        default="run04", help='Saving folder name')
     parser.add_argument('--method', type=str, required=False, default="cssr",
                         help='Methods : ' + ",".join(util.method_list.keys()))
     parser.add_argument('--test', action="store_true", help='Evaluation mode')
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     history = []
     evaluation = metrics.OSREvaluation(test_loader)
 
-    args.test = True
+    # args.test = True
     if not args.test:
         print(f"TotalEpochs:{config['epoch_num']}")
         training_main()
