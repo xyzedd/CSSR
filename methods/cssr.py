@@ -129,10 +129,14 @@ class Backbone(nn.Module):
         self.output_dim = self.backbone.output_dim
         # self.classifier = CRFClassifier(self.backbone.output_dim,numclss,config)
 
-    def forward(self, x):
-        x = self.backbone(x)
+    def forward(self, x, lamd, targets):
+        if targets is not None:
+            x, reweighted_target = self.backbone(x, lamd, targets)
+            return x, reweighted_target
+        else:
+            x = self.backbone(x, lamd, targets)
+            return x
         # latent , global prob , logits
-        return x
 
 
 class LinearClassifier(nn.Module):
@@ -317,12 +321,20 @@ class BackboneAndClassifier(nn.Module):
         self.cat_cls = clsblock['pcssr'](
             self.backbone.output_dim, num_classes, cat_config)
 
-    def forward(self, x, feature_only=False):
-        x = self.backbone(x)
+    def forward(self, x, lamd, targets, feature_only=False):
+        if targets is not None:
+            x, target_reweighted = self.backbone(x, lamd, targets)
+        else:
+            x = self.backbone(x, lamd, targets)
+
         logits = self.cat_cls(x)
         if feature_only:
             return x
-        return x, logits
+
+        if targets is None:
+            return x, logits
+        else:
+            return x, logits, target_reweighted
 
 
 class CSSRModel(nn.Module):
@@ -481,10 +493,15 @@ class CSSRModel(nn.Module):
             scores[pr] = (gm * avg_gram[pr]).sum(dim=[1, 2]).cpu().numpy()
         return scores.argmax(axis=0)
 
-    def forward(self, x, ycls=None, reqpredauc=False, prepareTest=False, reqfeature=False):
+    def forward(self, x, lamd, ycls=None, reqpredauc=False, prepareTest=False, reqfeature=False):
 
         # ----- New Arch
-        x, logits = self.backbone_cs(x, feature_only=reqfeature)
+        if ycls is None:
+            x, logits = self.backbone_cs(
+                x, lamd, targets=ycls, feature_only=reqfeature)
+        else:
+            x, logits, target_reweighted = self.backbone_cs(
+                x, lamd, targets=ycls, feature_only=reqfeature)
         # TODO: Append latents during evaluation here.
         if reqfeature:
             return x
@@ -494,7 +511,7 @@ class CSSRModel(nn.Module):
             def score_reduce(x): return x.reshape(
                 [x.shape[0], -1]).mean(axis=1)
             x_detach = x.detach()
-            probs = self.crt(xcls, prob=True).cpu().numpy()
+            probs = self.crt(xcls, target_reweighted, prob=True).cpu().numpy()
             pred = probs.argmax(axis=1)
             max_prob = probs.max(axis=1)
 
@@ -517,8 +534,9 @@ class CSSRModel(nn.Module):
             return pred, scores
 
         if self.training:
-            xcls = self.crt(xcls_raw, ycls)
+            xcls = self.crt(xcls_raw, target_reweighted, ycls)
             if reqpredauc:
+                target_reweighted = None
                 pred, score = pred_score(xcls_raw.detach())
                 # TODO: Here return the latent vector as well.
                 return xcls, pred, score
@@ -526,6 +544,7 @@ class CSSRModel(nn.Module):
             xcls = xcls_raw
             # xrot = self.rot_cls(x)
             if reqpredauc:
+                target_reweighted = None
                 pred, score = pred_score(xcls)
                 deviations = None
                 # powers = range(1,10)
@@ -556,23 +575,26 @@ class CSSRCriterion(nn.Module):
         self.avg_order = {"avg_softmax": 1, "softmax_avg": 2}[avg_order]
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.enable_sigma = enable_sigma
-
+        self.bce_loss = torch.nn.BCELoss()
     # TODO: Change in forward method to update the loss function from softmax to CAC distance based loss @ https://github.com/dimitymiller/cac-openset
 
-    def forward(self, x, y=None, prob=False, pred=False):
+    def forward(self, x, reweighted_target, y=None, prob=False, pred=False):
         if self.avg_order == 1:
             g = self.avg_pool(x).view(x.shape[0], -1)
             g = torch.softmax(g, dim=1)
         elif self.avg_order == 2:
             g = torch.softmax(x, dim=1)
             g = self.avg_pool(g).view(x.size(0), -1)
-        if prob:
+        if prob and reweighted_target is None:
             return g
-        if pred:
+        if pred and reweighted_target is None:
             return torch.argmax(g, dim=1)
-        loss = -torch.sum(self.get_onehot_label(y,
-                          g.shape[1]) * torch.log(g), dim=1).mean()
-        return loss
+
+        if reweighted_target is not None:
+            loss = self.bce_loss(g, reweighted_target)
+        # loss = -torch.sum(self.get_onehot_label(y,
+        #                   g.shape[1]) * torch.log(g), dim=1).mean()
+            return loss
 
 
 def manual_contrast(x):
@@ -674,6 +696,14 @@ class CSSRMethod:
 
         self.prepared = -999
 
+    def mixup_data(self, alp):
+        '''Return lambda'''
+        if alp > 0:
+            lam = np.random.beta(alp, alp)
+        else:
+            lam = 1.
+        return lam
+
     def train_epoch(self):
         data_time = AverageMeter()
         batch_time = AverageMeter()
@@ -689,9 +719,14 @@ class CSSRMethod:
 
             self.lr = self.lr_schedule.get_lr(self.epoch, i, self.lr)
             util.set_lr([self.modelopt], self.lr)
+
+            # Adding mixup here
+            lam = self.mixup_data(alp=0.1)
+            lam = torch.from_numpy(np.array([lam]).astype('float32')).cuda()
+
             sx, lb = data[0].cuda(), data[1].cuda()
 
-            loss, pred, scores = self.model(sx, lb, reqpredauc=True)
+            loss, pred, scores = self.model(sx, lam, lb, reqpredauc=True)
             self.modelopt.zero_grad()
             loss.backward()
             self.modelopt.step()
@@ -730,8 +765,12 @@ class CSSRMethod:
             for d in tqdm.tqdm(loader):
                 x1 = d[0].cuda(non_blocking=True)
                 gt = d[1].numpy()
+                lam = self.mixup_data(alp=0.1)
+                lam = torch.from_numpy(
+                    np.array([lam]).astype('float32')).cuda()
+
                 pred, scr, dev = self.model(
-                    x1, reqpredauc=True, prepareTest=prepare)
+                    x1, lam, reqpredauc=True, prepareTest=prepare)
 
                 prediction.append(pred)
                 scores.append(scr)
