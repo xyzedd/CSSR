@@ -1,4 +1,4 @@
 {
-    "inherit" : "./configs/pcssr.json",
-    "backbone" : "wideresnet40-4"
+    "inherit": "./configs/pcssr.json",
+    "backbone": "resnet18"
 }
