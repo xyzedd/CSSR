@@ -1,50 +1,21 @@
-# Class Specific Semantic Reconstruction for Open Set Recognition [TPAMI 2022] 
 
-Official PyTorch implementation of [Class Specific Semantic Reconstruction for Open Set Recognition](https://ieeexplore.ieee.org/document/9864101).
+# Open set recognition implementation
+In this project, I have implemented open set recognition using different references. T
+There are three branches main, integrate_cac, and mixup. The implementation is performed for only CIFAR10 dataset as of now.
 
-## 1. Train
+In main branch it consists of the implementation of the autoencoder based CSSR, where distance is measured between the latent representation and its mean. The integrate_cac branch uses a cac loss based technique and the mixup branch uses the manifold mixup technique.
 
-Before training, please setup dataset directories in `dataset.py`:
-```
-DATA_PATH = ''          # path for cifar10, svhn
-TINYIMAGENET_PATH = ''  # path for tinyimagenet
-LARGE_OOD_PATH = ''     # path for ood datasets, e.g., iNaturalist in imagenet experiment
-IMAGENET_PATH = ''      # path for imagenet-1k datasets
-```
+Note: This repository is still in the development phase and you might encounter issues while running the code. Please open an issue for any errors.
 
-To train models from scratch, run command:
-```
-python main.py --gpu 0 --ds {DATASET} --config {MODEL} --save {SAVING_NAME} --method cssr
-```
-
-Command options: 
-- **DATASET:** Experiment configuration file, specifying datasets and random splits, e.g., `./exps/$dataset/spl_$s.json`.
-- **MODEL:** OSR model configuration file, specifying model parameters, e.g., ./configs/$model/$dataset.json. `$model` includes linear/pcssr/rcssr, which corresponds to the baseline and the proposed model.
-
-Or simply run bash file `sh run.sh` to run all experiments simultaneously.
-
-To train models by finetuning pretrained backbones, like experiments for imagenet-1k, run command:
-```
-python main.py --gpu 0 --ds ./exps/imagenet/vs_inaturalist.json --config ./configs/rcssr/imagenet.json --save imagenet1k_rcssr --method cssr_ft
-```
-
-## 2. Evaluation
-
-Add `--test` on training commands to restore and evaluate a pretrained model on specified data setup, e.g.,
-```
-python main.py --gpu 0 --ds {DATASET} --config {MODEL} --save {SAVING_NAME} --method cssr --test
-```
-
-With models trained by `sh run.sh`, script `collect_metrics.py` helps collect and present experimental results: `python collect_metrics.py`
+ 1. Class Specific Semantic Reconstruction for Open Set Recognition [[Paper]](https://ieeexplore.ieee.org/document/9864101), [[Code]](https://github.com/xyzedd/CSSR).
+ 2. Class Anchor Clustering: a Loss for Distance-based Open Set Recognition [[Paper]](https://arxiv.org/abs/2004.02434), [[Code]](https://github.com/dimitymiller/cac-openset).
+ 3. Manifold Mixup: Better Representations by Interpolating Hidden States [[Paper]](https://arxiv.org/abs/1806.05236), [[Code]](https://github.com/vikasverma1077/manifold_mixup)
 
 
-## 3. Citation
-```
-@ARTICLE{9864101,
-  author={Huang, Hongzhi and Wang, Yu and Hu, Qinghua and Cheng, Ming-Ming},
-  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence},
-  title={Class-Specific Semantic Reconstruction for Open Set Recognition},
-  year={2022},
-  doi={10.1109/TPAMI.2022.3200384}
-}
-```
+ TODO: 
+  1. refactor the code
+  2. make arguments consice to run from terminal
+  3. Run training for all datasets
+
+
+Run ```main.py``` for training. And for evaluation set ```args.test``` to ```True```.
