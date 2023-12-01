@@ -1,4 +1,5 @@
 resources/
+networks/
 save/
 __pycache__/
 .vscode/

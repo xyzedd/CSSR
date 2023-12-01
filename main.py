@@ -141,7 +141,7 @@ def overall_testing():
         "close acc": last_acc,
         "open_detection": indexes,
         "open_reco": osr_indexes}
-    with open("./save/run04/eval.json", "w") as f:
+    with open("./save/manifold_mixup/eval.json", "w") as f:
         json.dump(metrices, f)
 
 
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     parser.add_argument('--config', type=str, required=False,
                         default="./configs/pcssr/cifar10.json", help='model configuration, choose from ./configs')
     parser.add_argument('--save', type=str, required=False,
-                        default="run04", help='Saving folder name')
+                        default="manifold_mixup", help='Saving folder name')
     parser.add_argument('--method', type=str, required=False, default="cssr",
                         help='Methods : ' + ",".join(util.method_list.keys()))
     parser.add_argument('--test', action="store_true", help='Evaluation mode')

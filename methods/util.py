@@ -2,6 +2,7 @@
 
 import os
 import numpy as np
+import torch
 
 img_size = 32
 
